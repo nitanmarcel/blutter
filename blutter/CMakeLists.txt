@@ -106,6 +106,8 @@ if (NO_METHOD_EXTRACTOR_STUB)
 endif()
 if (UNIFORM_INTEGER_ACCESS)
 	set(defines ${defines} UNIFORM_INTEGER_ACCESS)
+if (IDA_FCN)
+	set(defines ${defines} IDA_FCN)
 endif()
 target_compile_definitions(${BINNAME} PRIVATE ${defines})
 
