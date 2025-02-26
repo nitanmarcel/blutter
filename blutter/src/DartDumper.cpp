@@ -42,6 +42,23 @@ static std::string getFunctionName4Ida(const DartFunction& dartFn, const std::st
 		fnName.replace(pos, 2, "_");
 	}
 
+    const std::string problematicChars = "{}[]()<>:;,!?'\"`~^&*+=|\\/ ";
+    for (char c : problematicChars) {
+        pos = 0;
+        while ((pos = fnName.find(c, pos)) != std::string::npos) {
+            fnName.replace(pos, 1, "_");
+            pos += 1;
+        }
+    }
+    
+    pos = 0;
+    while ((pos = fnName.find("__", pos)) != std::string::npos) {
+        fnName.erase(pos, 1);
+    }
+    
+    if (!fnName.empty() && std::isdigit(fnName[0])) {
+       
+
 	auto periodPos = fnName.find('.');
 	std::string prefix;
 	if (dartFn.IsStatic() && dartFn.Kind() == DartFunction::NORMAL && periodPos != std::string::npos) {
