@@ -27,81 +27,89 @@ static std::unordered_map<std::string, std::string> OP_MAP {
 
 static std::string getFunctionName4Ida(const DartFunction& dartFn, const std::string& cls_prefix)
 {
-	auto fnName = dartFn.Name();
-	if (dartFn.IsClosure() && fnName == "<anonymous closure>") {
-		return "_anon_closure";
-	}
-
-	if (fnName.starts_with("#")) {
-		fnName.replace(0, 1, "@");
-	}
-
-	for (size_t pos = 0; ; pos += 1) {
-		pos = fnName.find("|_", pos);
-		if (pos == std::string::npos) break;
-		fnName.replace(pos, 2, "_");
-	}
-
-	auto periodPos = fnName.find('.');
-	std::string prefix;
-	if (dartFn.IsStatic() && dartFn.Kind() == DartFunction::NORMAL && periodPos != std::string::npos) {
-		// this one is extension
-		prefix = fnName.substr(0, periodPos + 1);
-		if (prefix.starts_with("_extension#")) {
-			// anonymous extension. '#' is invalid name in IDA.
-			std::replace(prefix.begin(), prefix.end(), '#', '@');
-		}
-		fnName = fnName.substr(periodPos + 1);
-	}
-
-	// fnNames: #0#4internal, #0#1internal gives invalid name in IDA due to '#'
-	// lib file: https://github.com/worawit/blutter/issues/93#issuecomment-2283490634
-	for (size_t pos = 0; pos < fnName.size(); ++pos) {
-		if (fnName[pos] == '@' && pos + 1 < fnName.size() && fnName[pos + 1] == '#') {
-			fnName.replace(pos, 2, "_");
-		} else if (fnName[pos] == '0' && pos + 1 < fnName.size() && fnName[pos + 1] == '#') {
-			fnName.replace(pos, 2, "0");
-		} else if (fnName[pos] == '#') {
-			fnName[pos] = '_';
-		}
-	}
-
-	if (OP_MAP.contains(fnName)) {
-		return prefix + "op_" + OP_MAP[fnName];
-	}
-	const auto last = fnName.back();
-	if (last == '=') {
-		fnName.pop_back();
-		return prefix + fnName + "_assign";
-	}
-	else if (last == '-') {
-		fnName.pop_back();
-		return prefix + fnName + "_neg";
-	}
-	else if (last == '!') {
-		fnName.pop_back();
-		return prefix + fnName + "_not";
-	}
-
-	switch (dartFn.Kind()) {
-	case DartFunction::CONSTRUCTOR: {
-		std::string name = dartFn.IsStatic() ? "factory_ctor" : "ctor";
-		ASSERT(fnName.starts_with(cls_prefix));
-		if (fnName[cls_prefix.length()] == '.') {
-			name += '_';
-			name += &fnName[cls_prefix.length() + 1];
-		}
-		return name;
-	}
-	case DartFunction::SETTER:
-		return "set_" + fnName;
-	case DartFunction::GETTER:
-		return "get_" + fnName;
-	default:
-		break;
-	}
-
-	return prefix + fnName;
+    auto fnName = dartFn.Name();
+    if (dartFn.IsClosure() && fnName == "<anonymous closure>") {
+        return "_anon_closure";
+    }
+    
+    if (fnName.starts_with("#")) {
+        fnName.replace(0, 1, "@");
+    }
+    
+    auto periodPos = fnName.find('.');
+    std::string prefix;
+    if (dartFn.IsStatic() && dartFn.Kind() == DartFunction::NORMAL && periodPos != std::string::npos) {
+        // this one is extension
+        prefix = fnName.substr(0, periodPos + 1);
+        if (prefix.starts_with("_extension#")) {
+            std::replace(prefix.begin(), prefix.end(), '#', '@');
+        }
+        fnName = fnName.substr(periodPos + 1);
+    }
+    
+    for (size_t pos = 0; pos < fnName.size(); ++pos) {
+        if (fnName[pos] == '@' && pos + 1 < fnName.size() && fnName[pos + 1] == '#') {
+            fnName.replace(pos, 2, "_");
+        } else if (fnName[pos] == '0' && pos + 1 < fnName.size() && fnName[pos + 1] == '#') {
+            fnName.replace(pos, 2, "0");
+        } else if (fnName[pos] == '#') {
+            fnName[pos] = '_';
+        }
+    }
+    
+    // Replace "|_" with "_"
+    for (size_t pos = 0; ; pos += 1) {
+        pos = fnName.find("|_", pos);
+        if (pos == std::string::npos) break;
+        fnName.replace(pos, 2, "_");
+    }
+    
+    const std::string problematicChars = "{}[]()<>:;,!?'\"`~^&*+=|\\/$#- ";
+    for (char c : problematicChars) {
+        for (size_t pos = 0; ; pos += 1) {
+            pos = fnName.find(c, pos);
+            if (pos == std::string::npos) break;
+            fnName.replace(pos, 1, "_");
+        }
+    }
+    
+    if (OP_MAP.contains(fnName)) {
+        return prefix + "op_" + OP_MAP[fnName];
+    }
+    
+    const auto last = fnName.back();
+    if (last == '=') {
+        fnName.pop_back();
+        return prefix + fnName + "_assign";
+    }
+    else if (last == '-') {
+        fnName.pop_back();
+        return prefix + fnName + "_neg";
+    }
+    else if (last == '!') {
+        fnName.pop_back();
+        return prefix + fnName + "_not";
+    }
+    
+    switch (dartFn.Kind()) {
+    case DartFunction::CONSTRUCTOR: {
+        std::string name = dartFn.IsStatic() ? "factory_ctor" : "ctor";
+        ASSERT(fnName.starts_with(cls_prefix));
+        if (fnName[cls_prefix.length()] == '.') {
+            name += '_';
+            name += &fnName[cls_prefix.length() + 1];
+        }
+        return name;
+    }
+    case DartFunction::SETTER:
+        return "set_" + fnName;
+    case DartFunction::GETTER:
+        return "get_" + fnName;
+    default:
+        break;
+    }
+    
+    return prefix + fnName;
 }
 
 void DartDumper::Dump4Ida(std::filesystem::path outDir)
